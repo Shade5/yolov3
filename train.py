@@ -8,6 +8,17 @@ import test  # Import test.py to get mAP after each epoch
 from models import *
 from utils.datasets import *
 from utils.utils import *
+from tqdm import tqdm
+from tensorboardX import SummaryWriter
+from datetime import datetime
+
+
+def log(writer, mloss, n_iter):
+	writer.add_scalar('loss/x+y', mloss['xy'], n_iter)
+	writer.add_scalar('loss/w+h', mloss['wh'], n_iter)
+	writer.add_scalar('loss/conf', mloss['conf'], n_iter)
+	writer.add_scalar('loss/cls', mloss['cls'], n_iter)
+	writer.add_scalar('loss/total', mloss['total'], n_iter)
 
 
 def train(
@@ -28,6 +39,9 @@ def train(
     latest = weights + 'latest.pt'
     best = weights + 'best.pt'
     device = torch_utils.select_device()
+    run_name = "fixed" + datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    writer = SummaryWriter("./tbx/" + run_name)
+    print("Run name:", run_name)
 
     if multi_scale:
         img_size = 608  # initiate with maximum multi_scale size
@@ -42,7 +56,7 @@ def train(
     model = Darknet(cfg, img_size).to(device)
 
     # Optimizer
-    lr0 = 0.001  # initial learning rate
+    lr0 = 0.00001  # initial learning rate
     optimizer = torch.optim.SGD(model.parameters(), lr=lr0, momentum=0.9, weight_decay=0.0005)
 
     cutoff = -1  # backbone reaches to cutoff layer
@@ -106,6 +120,7 @@ def train(
     n_burnin = min(round(nB / 5 + 1), 1000)  # burn-in batches
     os.remove('train_batch0.jpg') if os.path.exists('train_batch0.jpg') else None
     os.remove('test_batch0.jpg') if os.path.exists('test_batch0.jpg') else None
+    n_iter = 0
     for epoch in range(start_epoch, epochs):
         model.train()
         print(('\n%8s%12s' + '%10s' * 7) % ('Epoch', 'Batch', 'xy', 'wh', 'conf', 'cls', 'total', 'nTargets', 'time'))
@@ -120,17 +135,13 @@ def train(
                     p.requires_grad = False if epoch == 0 else True
 
         mloss = defaultdict(float)  # mean loss
-        for i, (imgs, targets, _, _) in enumerate(dataloader):
+        for i, (imgs, targets, _, _) in enumerate(tqdm(dataloader)):
             imgs = imgs.to(device)
             targets = targets.to(device)
 
             nt = len(targets)
             if nt == 0:  # if no targets continue
                 continue
-
-            # Plot images with bounding boxes
-            if epoch == 0 and i == 0:
-                plot_images(imgs=imgs, targets=targets, fname='train_batch0.jpg')
 
             # SGD burn-in
             if epoch == 0 and i <= n_burnin:
@@ -159,12 +170,9 @@ def train(
             for key, val in loss_dict.items():
                 mloss[key] = (mloss[key] * i + val) / (i + 1)
 
-            s = ('%8s%12s' + '%10.3g' * 7) % (
-                '%g/%g' % (epoch, epochs - 1), '%g/%g' % (i, nB - 1),
-                mloss['xy'], mloss['wh'], mloss['conf'], mloss['cls'],
-                mloss['total'], nt, time.time() - t)
             t = time.time()
-            print(s)
+            log(writer, mloss, n_iter)
+            n_iter += 1
 
             # Multi-Scale training (320 - 608 pixels) every 10 batches
             if multi_scale and (i + 1) % 10 == 0:
@@ -173,14 +181,13 @@ def train(
 
         # Calculate mAP
         with torch.no_grad():
-            results = test.test(cfg, data_cfg, batch_size=batch_size, img_size=img_size, model=model)
-
-        # Write epoch results
-        with open('results.txt', 'a') as file:
-            file.write(s + '%11.3g' * 5 % results + '\n')  # P, R, mAP, F1, test_loss
-
+            mp, mr, ap, mf1, tloss = test.test(cfg, data_cfg, batch_size=batch_size, img_size=img_size, model=model)
+            writer.add_scalar('test/precision', mp, n_iter)
+            writer.add_scalar('test/recall', mr, n_iter)
+            writer.add_scalar('test/map', ap, n_iter)
+            writer.add_scalar('test/loss', tloss, n_iter)
         # Update best loss
-        test_loss = results[4]
+        test_loss = tloss
         if test_loss < best_loss:
             best_loss = test_loss
 
@@ -212,9 +219,9 @@ def train(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=273, help='number of epochs')
-    parser.add_argument('--batch-size', type=int, default=16, help='size of each image batch')
+    parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
     parser.add_argument('--accumulate', type=int, default=1, help='accumulate gradient x batches before optimizing')
-    parser.add_argument('--cfg', type=str, default='cfg/yolov3-spp.cfg', help='cfg file path')
+    parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
     parser.add_argument('--data-cfg', type=str, default='data/coco.data', help='coco.data file path')
     parser.add_argument('--multi-scale', action='store_true', help='random image sizes per batch 320 - 608')
     parser.add_argument('--img-size', type=int, default=416, help='pixels')
@@ -235,8 +242,8 @@ if __name__ == '__main__':
         opt.cfg,
         opt.data_cfg,
         img_size=opt.img_size,
-        resume=opt.resume or opt.transfer,
-        transfer=opt.transfer,
+        resume=True,
+        transfer=True,
         epochs=opt.epochs,
         batch_size=opt.batch_size,
         accumulate=opt.accumulate,
