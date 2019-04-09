@@ -10,6 +10,7 @@ from utils.datasets import *
 from utils.utils import *
 from tensorboardX import SummaryWriter
 from datetime import datetime
+from tqdm import tqdm
 
 
 def log(writer, mloss, n_iter):
@@ -54,7 +55,7 @@ def train(
 	model = Darknet(cfg, img_size).to(device)
 
 	# Optimizer
-	lr0 = 0.001  # initial learning rate
+	lr0 = 0.00001  # initial learning rate
 	optimizer = torch.optim.SGD(model.parameters(), lr=lr0, momentum=0.9, weight_decay=0.0005)
 
 	cutoff = -1  # backbone reaches to cutoff layer
@@ -133,7 +134,46 @@ def train(
 					p.requires_grad = False if epoch == 0 else True
 
 		mloss = defaultdict(float)  # mean loss
-		for i, (imgs, targets, _, _) in enumerate(dataloader):
+		# Calculate mAP
+		with torch.no_grad():
+			mp, mr, ap, mf1, tloss = test.test(cfg, data_cfg, batch_size=batch_size, img_size=img_size, model=model)
+			writer.add_scalar('test/precision', mp, n_iter)
+			writer.add_scalar('test/recall', mr, n_iter)
+			writer.add_scalar('test/map', ap, n_iter)
+			writer.add_scalar('test/loss', tloss, n_iter)
+
+		# Update best loss
+		test_loss = tloss
+		if test_loss < best_loss:
+			best_loss = test_loss
+
+		# Save training results
+		save = True and not opt.nosave
+		if save:
+			# Create checkpoint
+			chkpt = {'epoch': epoch,
+			         'best_loss': best_loss,
+			         'model': model.module.state_dict() if type(
+				         model) is nn.parallel.DistributedDataParallel else model.state_dict(),
+			         'optimizer': optimizer.state_dict()}
+
+			# Save latest checkpoint
+			torch.save(chkpt, latest)
+
+			# Save best checkpoint
+			if best_loss == test_loss:
+				torch.save(chkpt, best)
+
+			# Save backup every 10 epochs (optional)
+			if epoch > 0 and epoch % 10 == 0:
+				torch.save(chkpt, weights + 'backup%g.pt' % epoch)
+
+			# Delete checkpoint
+			del chkpt
+
+		model.train()
+
+		for i, (imgs, targets, _, _) in enumerate(tqdm(dataloader)):
 			imgs = imgs.to(device)
 			targets = targets.to(device)
 
@@ -168,63 +208,21 @@ def train(
 			for key, val in loss_dict.items():
 				mloss[key] = (mloss[key] * i + val) / (i + 1)
 
-			s = ('%8s%12s' + '%10.3g' * 7) % (
-				'%g/%g' % (epoch, epochs - 1), '%g/%g' % (i, nB - 1),
-				mloss['xy'], mloss['wh'], mloss['conf'], mloss['cls'],
-				mloss['total'], nt, time.time() - t)
 			t = time.time()
 			log(writer, mloss, n_iter)
 			n_iter += 1
-			print(s)
+
 
 			# Multi-Scale training (320 - 608 pixels) every 10 batches
 			if multi_scale and (i + 1) % 10 == 0:
 				dataset.img_size = random.choice(range(10, 20)) * 32
 				print('multi_scale img_size = %g' % dataset.img_size)
 
-		# Calculate mAP
-		with torch.no_grad():
-			mp, mr, map, mf1, mloss = test.test(cfg, data_cfg, batch_size=batch_size, img_size=img_size, model=model)
-			writer.add_scalar('test/precision', mp, n_iter)
-			writer.add_scalar('test/recall', mr, n_iter)
-			writer.add_scalar('test/map', map, n_iter)
-			writer.add_scalar('test/loss', mloss, n_iter)
-
-
-		# Update best loss
-		test_loss = mloss
-		if test_loss < best_loss:
-			best_loss = test_loss
-
-		# Save training results
-		save = True and not opt.nosave
-		if save:
-			# Create checkpoint
-			chkpt = {'epoch': epoch,
-			         'best_loss': best_loss,
-			         'model': model.module.state_dict() if type(
-				         model) is nn.parallel.DistributedDataParallel else model.state_dict(),
-			         'optimizer': optimizer.state_dict()}
-
-			# Save latest checkpoint
-			torch.save(chkpt, latest)
-
-			# Save best checkpoint
-			if best_loss == test_loss:
-				torch.save(chkpt, best)
-
-			# Save backup every 10 epochs (optional)
-			if epoch > 0 and epoch % 10 == 0:
-				torch.save(chkpt, weights + 'backup%g.pt' % epoch)
-
-			# Delete checkpoint
-			del chkpt
-
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--epochs', type=int, default=273, help='number of epochs')
-	parser.add_argument('--batch-size', type=int, default=16, help='size of each image batch')
+	parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
 	parser.add_argument('--accumulate', type=int, default=1, help='accumulate gradient x batches before optimizing')
 	parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
 	parser.add_argument('--data-cfg', type=str, default='data/coco.data', help='coco.data file path')
