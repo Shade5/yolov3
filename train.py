@@ -94,7 +94,7 @@ def train(
                                                      last_epoch=start_epoch - 1)
 
     # Dataset
-    dataset = LoadImagesAndLabels(train_path, img_size=img_size, augment=True)
+    dataset = LoadEpic("data/P01_01", "data/boxes.pkl", img_size=img_size, augment=True)
 
     # Initialize distributed training
     if torch.cuda.device_count() > 1:
