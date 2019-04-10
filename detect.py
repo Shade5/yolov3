@@ -81,8 +81,8 @@ def detect(
 
         print('Done. (%.3fs)' % (time.time() - t))
 
-        if webcam:  # Show live webcam
-            cv2.imshow(weights, im0)
+        cv2.imshow(weights, im0)
+        cv2.waitKey(0)
 
         if save_images:  # Save generated image with detections
             if dataloader.mode == 'video':
@@ -105,13 +105,13 @@ def detect(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default='cfg/yolov3-spp.cfg', help='cfg file path')
+    parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
     parser.add_argument('--data-cfg', type=str, default='data/coco.data', help='coco.data file path')
-    parser.add_argument('--weights', type=str, default='weights/yolov3-spp.weights', help='path to weights file')
+    parser.add_argument('--weights', type=str, default='weights/backup230.pt', help='path to weights file')
     parser.add_argument('--images', type=str, default='data/samples', help='path to images')
     parser.add_argument('--img-size', type=int, default=416, help='size of each image dimension')
-    parser.add_argument('--conf-thres', type=float, default=0.5, help='object confidence threshold')
-    parser.add_argument('--nms-thres', type=float, default=0.5, help='iou threshold for non-maximum suppression')
+    parser.add_argument('--conf-thres', type=float, default=0.1, help='object confidence threshold')
+    parser.add_argument('--nms-thres', type=float, default=0.1, help='iou threshold for non-maximum suppression')
     opt = parser.parse_args()
     print(opt)
 

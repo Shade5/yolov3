@@ -175,21 +175,23 @@ class LoadEpic(Dataset):  # for training/testing
 
         # Load labels
         entries = self.data_dict["P01_01" + "_" + self.img_files[index][-14:-4].lstrip("0")]
-        # for noun, noun_class, bbox in entries:
-        #     for y, x, h, w in bbox:
-        #         im = cv2.rectangle(im, (x, y), (x + w, y + h), (noun_class * 10, 0, 255), 2)
-        #         im = cv2.putText(im, noun, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (noun_class * 10, 0, 255), 2)
-        # cv2.imwrite("out/" + str(index) + ".png", im)
 
         labels = np.zeros((len(entries), 5))
         for i, (noun, noun_class, bbox) in enumerate(entries):
-            for y, x, h, w in bbox:
-                labels[i] = [noun_class, x, y, w, h]
+            for y, x, he, we in bbox:
+                labels[i] = [noun_class, x, y, we, he]
 
-        labels[:, 1] = ratio * w * (labels[:, 1] - labels[:, 3] / 2)/1920 + padw
-        labels[:, 2] = ratio * h * (labels[:, 2] - labels[:, 4] / 2)/1080 + padh
-        labels[:, 3] = ratio * w * (labels[:, 1] + labels[:, 3] / 2)/1920 + padw
-        labels[:, 4] = ratio * h * (labels[:, 2] + labels[:, 4] / 2)/1080 + padh
+        lcopy = labels.copy()
+        labels[:, 1] = ratio * (lcopy[:, 1]) + padw
+        labels[:, 2] = ratio * (lcopy[:, 2]) + padh
+        labels[:, 3] = ratio * (lcopy[:, 1] + lcopy[:, 3]) + padw
+        labels[:, 4] = ratio * (lcopy[:, 2] + lcopy[:, 4]) + padh
+
+        # im = img.copy()
+        # for i in range(labels.shape[0]):
+        #     _, x1, y1, x2, y2 = labels[i].astype(int)
+        #     im = cv2.rectangle(im, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        # cv2.imshow("d", im)
 
         # Augment image and labels
         if self.augment:
@@ -214,6 +216,13 @@ class LoadEpic(Dataset):  # for training/testing
                 img = np.flipud(img)
                 if nL:
                     labels[:, 2] = 1 - labels[:, 2]
+
+        # im = img.copy()
+        # for i in range(labels.shape[0]):
+        #     _, x, y, we, he = (labels[i]*416).astype(int)
+        #     im = cv2.rectangle(im, (x - we//2, y - he//2), (x + we//2, y + he//2), (0, 0, 255), 2)
+        # cv2.imshow("p", im)
+        # cv2.waitKey(0)
 
         labels_out = torch.zeros((nL, 6))
         if nL:

@@ -95,7 +95,14 @@ def train(
 
     # Dataset
     dataset = LoadEpic("data/P01_01", "data/boxes.pkl", img_size=img_size, augment=False)
-
+    # im, l, _, _ = dataset[585]
+    # im = np.transpose(im.cpu().numpy(), (1, 2, 0))
+    # l = (l.cpu().numpy()*418).astype(int)
+    # for i in range(l.shape[0]):
+    #     _, _, x, y, w, h = l[i]
+    #     im = cv2.rectangle(im, (x - w//2, y - h//2), (x + w//2, y + h//2), (0, 0, 255), 2)
+    # cv2.imshow("a", im)
+    # cv2.waitKey(0)
     # Initialize distributed training
     if torch.cuda.device_count() > 1:
         dist.init_process_group(backend=opt.backend, init_method=opt.dist_url, world_size=opt.world_size, rank=opt.rank)

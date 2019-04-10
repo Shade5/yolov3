@@ -44,7 +44,7 @@ def test(
     names = load_classes(data_cfg['names'])  # class names
 
     # Dataloader
-    dataset = LoadImagesAndLabels(test_path, img_size=img_size)
+    dataset = LoadEpic("data/P01_01", "data/boxes.pkl", img_size=img_size, augment=False)
     dataloader = DataLoader(dataset,
                             batch_size=batch_size,
                             num_workers=4,
