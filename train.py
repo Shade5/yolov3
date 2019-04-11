@@ -11,6 +11,7 @@ from utils.utils import *
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 from datetime import datetime
+from torch.utils.data.sampler import SubsetRandomSampler
 
 
 def log(writer, mloss, n_iter):
@@ -56,7 +57,7 @@ def train(
     model = Darknet(cfg, img_size).to(device)
 
     # Optimizer
-    lr0 = 0.00001  # initial learning rate
+    lr0 = 0.0001  # initial learning rate
     optimizer = torch.optim.SGD(model.parameters(), lr=lr0, momentum=0.9, weight_decay=0.0005)
 
     cutoff = -1  # backbone reaches to cutoff layer
@@ -94,8 +95,21 @@ def train(
                                                      last_epoch=start_epoch - 1)
 
     # Dataset
-    dataset = LoadEpic("data/P01_01", "data/boxes.pkl", img_size=img_size, augment=False)
-    # im, l, _, _ = dataset[585]
+    data_train = LoadEpic("data/object_detection_images/train", "data/boxes.pkl", "data/EPIC_train_object_labels.csv",img_size=img_size, augment=False)
+    data_test = LoadEpic("data/object_detection_images/train", "data/boxes.pkl", "data/EPIC_train_object_labels.csv",
+                          img_size=img_size, augment=False)
+    print("Total number of images:", len(data_train))
+
+    validation_split = .2
+    indices = list(range(len(data_train)))
+    split = int(np.floor(validation_split * len(data_train)))
+    np.random.shuffle(indices)
+    train_indices, val_indices = indices[split:], indices[:split]
+
+    # Creating PT data samplers and loaders:
+    train_sampler = SubsetRandomSampler(train_indices)
+    valid_sampler = SubsetRandomSampler(val_indices)
+    # im, l, _, _ = dataset[58600]
     # im = np.transpose(im.cpu().numpy(), (1, 2, 0))
     # l = (l.cpu().numpy()*418).astype(int)
     # for i in range(l.shape[0]):
@@ -112,13 +126,17 @@ def train(
         sampler = None
 
     # Dataloader
-    dataloader = DataLoader(dataset,
+    dataloader = DataLoader(data_train,
                             batch_size=batch_size,
                             num_workers=num_workers,
-                            shuffle=False,
-                            pin_memory=False,
-                            collate_fn=dataset.collate_fn,
-                            sampler=sampler)
+                            collate_fn=data_train.collate_fn,
+                            sampler=train_sampler)
+
+    test_dataloader = DataLoader(data_test,
+                            batch_size=batch_size,
+                            num_workers=num_workers,
+                            collate_fn=data_train.collate_fn,
+                            sampler=valid_sampler)
 
     # Start training
     t = time.time()
@@ -130,7 +148,7 @@ def train(
     n_iter = 0
     for epoch in range(start_epoch, epochs):
         model.train()
-        print(('\n%8s%12s' + '%10s' * 7) % ('Epoch', 'Batch', 'xy', 'wh', 'conf', 'cls', 'total', 'nTargets', 'time'))
+        print('Epoch', epoch)
 
         # Update scheduler
         scheduler.step()
@@ -183,12 +201,12 @@ def train(
 
             # Multi-Scale training (320 - 608 pixels) every 10 batches
             if multi_scale and (i + 1) % 10 == 0:
-                dataset.img_size = random.choice(range(10, 20)) * 32
-                print('multi_scale img_size = %g' % dataset.img_size)
+                data_train.img_size = random.choice(range(10, 20)) * 32
+                print('multi_scale img_size = %g' % data_train.img_size)
 
         # Calculate mAP
         with torch.no_grad():
-            mp, mr, ap, mf1, tloss = test.test(cfg, data_cfg, batch_size=batch_size, img_size=img_size, model=model)
+            mp, mr, ap, mf1, tloss = test.test(test_dataloader, model=model, img_size=img_size)
             writer.add_scalar('test/precision', mp, n_iter)
             writer.add_scalar('test/recall', mr, n_iter)
             writer.add_scalar('test/map', ap, n_iter)

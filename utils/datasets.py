@@ -11,6 +11,7 @@ import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
 import pickle
+import pandas as pd
 
 from utils.utils import xyxy2xywh
 
@@ -130,19 +131,22 @@ class LoadWebcam:  # for inference
 
 
 class LoadEpic(Dataset):  # for training/testing
-    def __init__(self, im_path, ann_path, img_size=416, augment=False):
+    def __init__(self, im_path, ann_path, file_names, img_size=416, augment=False):
         with open(ann_path, 'rb') as handle:
             self.data_dict = pickle.load(handle)
 
+        self.im_path = im_path
         self.img_size = img_size
         self.augment = augment
-        self.img_files = glob.glob(im_path + "/*.jpg")
+        self.files = pd.read_csv(file_names)
 
     def __len__(self):
-        return len(self.img_files)
+        return len(self.files)
 
     def __getitem__(self, index):
-        img_path = self.img_files[index]
+        _, _, f, sf, frame, _ = self.files.iloc[index]
+
+        img_path = self.im_path + "/" + f + "/" + sf + "/" + str(frame).zfill(10) + ".jpg"
 
         img = cv2.imread(img_path)  # BGR
         # im = img.copy()
@@ -174,7 +178,7 @@ class LoadEpic(Dataset):  # for training/testing
         img, ratio, padw, padh = letterbox(img, height=self.img_size)
 
         # Load labels
-        entries = self.data_dict["P01_01" + "_" + self.img_files[index][-14:-4].lstrip("0")]
+        entries = self.data_dict[sf + "_" + str(frame)]
 
         labels = np.zeros((len(entries), 5))
         for i, (noun, noun_class, bbox) in enumerate(entries):
