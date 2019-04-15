@@ -99,14 +99,13 @@ def test(
 
 	# Compute statistics
 	stats_np = [np.concatenate(x, 0) for x in list(zip(*stats))]
-	nt = np.bincount(stats_np[3].astype(np.int64), minlength=nc)  # number of targets per class
 	if len(stats_np):
 		p, r, ap, f1, ap_class = ap_per_class(*stats_np)
 		mp, mr, map, mf1 = p.mean(), r.mean(), ap.mean(), f1.mean()
 
 	# Print results
-	pf = '%20s' + '%10.3g' * 6  # print format
-	print(pf % ('all', seen, nt.sum(), mp, mr, map, mf1), end='\n\n')
+	pf = '%20s' + '%10.3g' * 5  # print format
+	print(pf % ('all', seen, mp, mr, map, mf1), end='\n\n')
 
 	# Return results
 	return mp, mr, map, mf1, loss

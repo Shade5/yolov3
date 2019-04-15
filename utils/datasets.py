@@ -11,7 +11,6 @@ import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
 import pickle
-import pandas as pd
 
 from utils.utils import xyxy2xywh
 
@@ -131,26 +130,32 @@ class LoadWebcam:  # for inference
 
 
 class LoadEpic(Dataset):  # for training/testing
-    def __init__(self, im_path, ann_path, file_names, img_size=416, augment=False):
+    def __init__(self, im_path, ann_path, img_size=416, augment=False):
         with open(ann_path, 'rb') as handle:
             self.data_dict = pickle.load(handle)
 
         self.im_path = im_path
         self.img_size = img_size
         self.augment = augment
-        self.files = pd.read_csv(file_names)
+        self.files = list(self.data_dict.keys())
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, index):
-        _, _, f, sf, frame, _ = self.files.iloc[index]
+        f, sf, frame = self.files[index][:3], self.files[index][:6], self.files[index][7:]
 
         img_path = self.im_path + "/" + f + "/" + sf + "/" + str(frame).zfill(10) + ".jpg"
 
-        img = cv2.imread(img_path)  # BGR
+        try:
+            img = cv2.imread(img_path)  # BGR
+        except:
+            print("Missing image:", img_path, "Index:", index)
+            img = np.zeros((1920, 1080, 3))
         # im = img.copy()
-        assert img is not None, 'File Not Found ' + img_path
+        if img is None:
+            print("Missing image:", img_path, "Index:", index)
+            img = np.zeros((1920, 1080, 3))
 
         augment_hsv = True
         if self.augment and augment_hsv:

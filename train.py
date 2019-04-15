@@ -95,9 +95,8 @@ def train(
                                                      last_epoch=start_epoch - 1)
 
     # Dataset
-    data_train = LoadEpic("data/object_detection_images/train", "data/boxes.pkl", "data/EPIC_train_object_labels.csv",img_size=img_size, augment=False)
-    data_test = LoadEpic("data/object_detection_images/train", "data/boxes.pkl", "data/EPIC_train_object_labels.csv",
-                          img_size=img_size, augment=False)
+    data_train = LoadEpic("data/object_detection_images/train", "data/boxes_small.pkl", img_size=img_size, augment=False)
+    data_test = LoadEpic("data/object_detection_images/train", "data/boxes_small.pkl", img_size=img_size, augment=False)
     print("Total number of images:", len(data_train))
 
     validation_split = .2
@@ -109,21 +108,20 @@ def train(
     # Creating PT data samplers and loaders:
     train_sampler = SubsetRandomSampler(train_indices)
     valid_sampler = SubsetRandomSampler(val_indices)
-    # im, l, _, _ = dataset[58600]
-    # im = np.transpose(im.cpu().numpy(), (1, 2, 0))
-    # l = (l.cpu().numpy()*418).astype(int)
-    # for i in range(l.shape[0]):
-    #     _, _, x, y, w, h = l[i]
-    #     im = cv2.rectangle(im, (x - w//2, y - h//2), (x + w//2, y + h//2), (0, 0, 255), 2)
-    # cv2.imshow("a", im)
-    # cv2.waitKey(0)
-    # Initialize distributed training
-    if torch.cuda.device_count() > 1:
-        dist.init_process_group(backend=opt.backend, init_method=opt.dist_url, world_size=opt.world_size, rank=opt.rank)
-        model = torch.nn.parallel.DistributedDataParallel(model)
-        sampler = torch.utils.data.distributed.DistributedSampler(dataset)
-    else:
-        sampler = None
+
+    # classes = load_classes("data/epic_veg.names")
+    # for j in range(len(data_train)):
+    #     im, l, _, _ = data_train[j]
+    #     im = np.transpose(im.cpu().numpy(), (1, 2, 0))
+    #     l = l.cpu().numpy()
+    #     l[:, 2:] = l[:, 2:]*418
+    #     l = l.astype(int)
+    #     for i in range(l.shape[0]):
+    #         _, cl, x, y, w, h = l[i]
+    #         im = cv2.rectangle(im, (x - w//2, y - h//2), (x + w//2, y + h//2), (0, 0, 255), 2)
+    #         im = cv2.putText(im, classes[cl], (x - w//2, y - h//2), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    #     cv2.imshow("a", cv2.cvtColor(im, cv2.COLOR_RGB2BGR))
+    #     cv2.waitKey(0)
 
     # Dataloader
     dataloader = DataLoader(data_train,
@@ -146,6 +144,7 @@ def train(
     os.remove('train_batch0.jpg') if os.path.exists('train_batch0.jpg') else None
     os.remove('test_batch0.jpg') if os.path.exists('test_batch0.jpg') else None
     n_iter = 0
+
     for epoch in range(start_epoch, epochs):
         model.train()
         print('Epoch', epoch)
