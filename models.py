@@ -178,10 +178,14 @@ class Darknet(nn.Module):
         self.module_defs[0]['cfg'] = cfg_path
         self.module_defs[0]['height'] = img_size
         self.hyperparams, self.module_list = create_modules(self.module_defs)
+        self.maxp2 = nn.MaxPool2d(2, 2)
+        self.maxp4 = nn.MaxPool2d(4, 4)
+        self.food_classifier = nn.Linear(54*13*13, 20)
 
-    def forward(self, x, var=None):
+    def forward(self, x, var=None, classify=False):
         img_size = x.shape[-1]
         layer_outputs = []
+        features = []
         output = []
 
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
@@ -198,9 +202,15 @@ class Darknet(nn.Module):
                 layer_i = int(module_def['from'])
                 x = layer_outputs[-1] + layer_outputs[layer_i]
             elif mtype == 'yolo':
+                features.append(x)
                 x = module[0](x, img_size)
                 output.append(x)
             layer_outputs.append(x)
+
+        class_feature = torch.cat((features[0], self.maxp2(features[1]), self.maxp4(features[2])), dim=1).view(-1, 54*13*13)
+
+        if classify:
+            return self.food_classifier(class_feature)
 
         if self.training:
             return output
