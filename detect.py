@@ -42,18 +42,19 @@ def detect(
         save_images = False
         dataloader = LoadWebcam(img_size=img_size)
     else:
-        dataloader = LoadImages(images, img_size=img_size)
+        dataloader = LoadEpic("data/object_detection_images/train", "data/boxes_small.pkl", img_size=img_size, augment=False)
 
     # Get classes and colors
     classes = load_classes(parse_data_cfg(data_cfg)['names'])
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(classes))]
 
-    for i, (path, img, im0, vid_cap) in enumerate(dataloader):
+    for i in range(len(dataloader)):
+        (img, targets, _, _) = dataloader[np.random.randint(0, len(dataloader))]
         t = time.time()
-        save_path = str(Path(output) / Path(path).name)
 
         # Get detections
-        img = torch.from_numpy(img).unsqueeze(0).to(device)
+        im0 = cv2.cvtColor(np.transpose(img.numpy(), (1, 2, 0)), cv2.COLOR_RGB2BGR)
+        img = img.unsqueeze(0).to(device)
         if ONNX_EXPORT:
             torch.onnx.export(model, img, 'weights/model.onnx', verbose=True)
             return
@@ -71,11 +72,6 @@ def detect(
 
             # Draw bounding boxes and labels of detections
             for *xyxy, conf, cls_conf, cls in detections:
-                if save_txt:  # Write to file
-                    with open(save_path + '.txt', 'a') as file:
-                        file.write(('%g ' * 6 + '\n') % (*xyxy, cls, conf))
-
-                # Add bbox to the image
                 label = '%s %.2f' % (classes[int(cls)], conf)
                 plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
 
@@ -83,25 +79,6 @@ def detect(
 
         cv2.imshow(weights, im0)
         cv2.waitKey(0)
-
-        if save_images:  # Save generated image with detections
-            if dataloader.mode == 'video':
-                if vid_path != save_path:  # new video
-                    vid_path = save_path
-                    if isinstance(vid_writer, cv2.VideoWriter):
-                        vid_writer.release()  # release previous video writer
-                    width = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    height = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    fps = vid_cap.get(cv2.CAP_PROP_FPS)
-                    vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'avc1'), fps, (width, height))
-                vid_writer.write(im0)
-
-            else:
-                cv2.imwrite(save_path, im0)
-
-    if save_images and platform == 'darwin':  # macos
-        os.system('open ' + output + ' ' + save_path)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

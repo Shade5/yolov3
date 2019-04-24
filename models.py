@@ -180,7 +180,7 @@ class Darknet(nn.Module):
         self.hyperparams, self.module_list = create_modules(self.module_defs)
         self.maxp2 = nn.MaxPool2d(2, 2)
         self.maxp4 = nn.MaxPool2d(4, 4)
-        self.food_classifier = nn.Linear(54*13*13, 20)
+        self.food_classifier = nn.Linear(54*13*13, 42)
 
     def forward(self, x, var=None, classify=False):
         img_size = x.shape[-1]
