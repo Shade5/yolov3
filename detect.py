@@ -42,7 +42,7 @@ def detect(
         save_images = False
         dataloader = LoadWebcam(img_size=img_size)
     else:
-        dataloader = LoadEpic("data/object_detection_images/train", "data/boxes_small.pkl", img_size=img_size, augment=False)
+        dataloader = LoadEpic("", "/home/a/workspace/katerina/yolov3/in_boxes.pkl", img_size=img_size, augment=False)
 
     # Get classes and colors
     classes = load_classes(parse_data_cfg(data_cfg)['names'])
@@ -84,11 +84,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
     parser.add_argument('--data-cfg', type=str, default='data/coco.data', help='coco.data file path')
-    parser.add_argument('--weights', type=str, default='weights/backup100.pt', help='path to weights file')
+    parser.add_argument('--weights', type=str, default='weights/backup240.pt', help='path to weights file')
     parser.add_argument('--images', type=str, default='data/samples', help='path to images')
     parser.add_argument('--img-size', type=int, default=416, help='size of each image dimension')
-    parser.add_argument('--conf-thres', type=float, default=0.15, help='object confidence threshold')
-    parser.add_argument('--nms-thres', type=float, default=0.15, help='iou threshold for non-maximum suppression')
+    parser.add_argument('--conf-thres', type=float, default=0.05, help='object confidence threshold')
+    parser.add_argument('--nms-thres', type=float, default=0.05, help='iou threshold for non-maximum suppression')
     opt = parser.parse_args()
     print(opt)
 
