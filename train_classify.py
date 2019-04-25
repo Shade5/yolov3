@@ -24,6 +24,39 @@ def log(writer, mloss, n_iter):
 	writer.add_scalar('loss/total', mloss['total'], n_iter)
 
 
+def train_step_class(model, data, optimizer, criterion, device):
+	(inputs, labels, weights) = data
+	inputs = inputs.to(device)
+	labels = labels.to(device)
+
+	optimizer.zero_grad()
+	outputs = torch.sigmoid(model(inputs, classify=True))
+	loss = criterion(outputs, labels)
+	loss.backward()
+	optimizer.step()
+
+	return loss
+
+
+def train_step_detect(model, data, optimizer, device):
+	(imgs, targets, _, _) = data
+	imgs = imgs.to(device)
+	targets = targets.to(device)
+
+	nt = len(targets)
+	if nt == 0:  # if no targets continue
+		return 0
+
+	optimizer.zero_grad()
+	pred = model(imgs)
+	target_list = build_targets(model, targets)
+	loss, loss_dict = compute_loss(pred, target_list)
+	loss.backward()
+	optimizer.step()
+
+	return loss
+
+
 def train(
 		cfg,
 		data_cfg,
@@ -52,15 +85,15 @@ def train(
 			transforms.Normalize([0.485, 0.456, 0.406], [1, 1, 1])
 		]),
 	}
-	writer_train = SummaryWriter('./tbx/' + "YOLO_CLASS" + str(datetime.now())[:-7] + "/train")
 
-	data_train = VOC("./scraped100", split='trainval', transform=data_transforms['train'])
-	data_test = VOC("./scraped100", split='test', transform=data_transforms['val'])
+	# Classifier Dataloader
+	data_train_class = VOC("./scraped100", split='trainval', transform=data_transforms['train'])
+	data_test_class = VOC("./scraped100", split='test', transform=data_transforms['val'])
 
 	validation_split = .2
 
-	indices = list(range(len(data_train)))
-	split = int(np.floor(validation_split * len(data_train)))
+	indices = list(range(len(data_train_class)))
+	split = int(np.floor(validation_split * len(data_train_class)))
 	np.random.shuffle(indices)
 	train_indices, val_indices = indices[split:], indices[:split]
 
@@ -68,32 +101,43 @@ def train(
 	train_sampler = SubsetRandomSampler(train_indices)
 	valid_sampler = SubsetRandomSampler(val_indices)
 
-	dataloader_train = DataLoader(data_train, batch_size=32, sampler=train_sampler, num_workers=4)
-	dataloader_test = DataLoader(data_test, batch_size=32, sampler=valid_sampler, num_workers=4)
+	dataloader_train_class = DataLoader(data_train_class, batch_size=batch_size, sampler=train_sampler, num_workers=4)
+	dataloader_test_class = DataLoader(data_test_class, batch_size=batch_size, sampler=valid_sampler, num_workers=4)
+
+
+	# Classifier Detector
+	data_train_detect = LoadEpic("data/object_detection_images/train", "data/boxes_small.pkl", img_size=img_size, augment=False)
+	data_test_detect = LoadEpic("data/object_detection_images/train", "data/boxes_small.pkl", img_size=img_size, augment=False)
+
+	validation_split = .2
+
+	indices = list(range(len(data_train_detect)))
+	split = int(np.floor(validation_split * len(data_train_detect)))
+	np.random.shuffle(indices)
+	train_indices, val_indices = indices[split:], indices[:split]
+
+	# Creating PT data samplers and loaders:
+	train_sampler = SubsetRandomSampler(train_indices)
+	valid_sampler = SubsetRandomSampler(val_indices)
+
+	dataloader_train_detect = DataLoader(data_train_detect, batch_size=batch_size, sampler=train_sampler, num_workers=4)
+	dataloader_test_detect = DataLoader(data_test_detect, batch_size=batch_size, sampler=valid_sampler, num_workers=4)
 
 	weights = 'weights' + os.sep
 	latest = weights + 'latest.pt'
 	best = weights + 'best.pt'
 	device = torch_utils.select_device()
-	run_name = "fixed" + datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-	writer = SummaryWriter("./tbx/" + run_name)
+	run_name = "hydra" + datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+	writer_train = SummaryWriter("./tbx/" + run_name)
 	print("Run name:", run_name)
 
-	if multi_scale:
-		img_size = 608  # initiate with maximum multi_scale size
-		num_workers = 0  # bug https://github.com/ultralytics/yolov3/issues/174
-	else:
-		torch.backends.cudnn.benchmark = True  # unsuitable for multiscale
+	torch.backends.cudnn.benchmark = True
 
 	# Configure run
 	train_path = parse_data_cfg(data_cfg)['train']
 
 	# Initialize model
 	model = Darknet(cfg, img_size).to(device)
-
-	# Optimizer
-	lr0 = 0.0001  # initial learning rate
-	optimizer = torch.optim.SGD(model.parameters(), lr=lr0, momentum=0.9, weight_decay=0.0005)
 
 	cutoff = -1  # backbone reaches to cutoff layer
 	start_epoch = 0
@@ -107,44 +151,35 @@ def train(
 		p.requires_grad = True if p.shape[0] == nf else False
 
 	criterion = nn.BCELoss()
-	optimizer = optim.Adam(model.parameters())
+	optimizer = optim.Adam(model.parameters(), lr= 0.0001)
 
 	global_step = 0
 
 	for e in range(20):
 		model.train()
-		for batch, (inputs, labels, weights) in enumerate(tqdm(dataloader_train)):
-			inputs = inputs.to(device)
-			labels = labels.to(device)
-			weights = weights.to(device)
-
-			# zero the parameter gradients
-			optimizer.zero_grad()
-
-			# forward
-			# track history if only in train
-			with torch.set_grad_enabled(True):
-				outputs = torch.sigmoid(model(inputs, classify=True))
-				loss = criterion(outputs, labels)
-
-			loss.backward()
-			optimizer.step()
-			writer_train.add_scalar('train/Loss', loss, global_step)
+		for batch, data in enumerate(tqdm(zip(dataloader_train_class, dataloader_train_detect))):
+			loss = train_step_class(model, data[0], optimizer, criterion, device)
+			writer_train.add_scalar('train/Classifier_Loss', loss, global_step)
+			loss = train_step_detect(model, data[1], optimizer, device)
+			writer_train.add_scalar('train/Detector_Loss', loss, global_step)
 
 			global_step += 1
 
-		print(loss)
-
 		if e % 2 == 0:
+			model.eval()
 			torch.save(model.state_dict(), "./pytorch_models/" + str(e))
-			AP, mAP, acc = eval_dataset_map(model, dataloader_test, device)
-			writer_train.add_scalar('val/mAP', mAP, global_step)
-			writer_train.add_scalar('val/acc', acc, global_step)
-			print("Test mAP, acc", mAP, acc)
-			AP, mAP, acc = eval_dataset_map(model, dataloader_train, device)
-			writer_train.add_scalar('train/mAP', mAP, global_step)
-			writer_train.add_scalar('train/acc', acc, global_step)
-			print("Train mAP, acc", mAP, acc)
+			AP, mAP, acc = eval_dataset_map(model, dataloader_test_class, device)
+			writer_train.add_scalar('val/Classifier_mAP', mAP, global_step)
+			writer_train.add_scalar('val/Classifier_acc', acc, global_step)
+			AP, mAP, acc = eval_dataset_map(model, dataloader_test_class, device)
+			writer_train.add_scalar('train/Classifier_mAP', mAP, global_step)
+			writer_train.add_scalar('train/Classifier_acc', acc, global_step)
+
+			mp, mr, ap, mf1, tloss = test.test(dataloader_test_detect, model=model, img_size=img_size)
+			writer_train.add_scalar('val/Detector_precision', mp, global_step)
+			writer_train.add_scalar('val/Detector_recall', mr, global_step)
+			writer_train.add_scalar('val/Detector_map', ap, global_step)
+			writer_train.add_scalar('val/Detector_loss', tloss, global_step)
 
 
 if __name__ == '__main__':
