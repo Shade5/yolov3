@@ -18,10 +18,10 @@ cv2.namedWindow('a')
 cv2.setMouseCallback('a', onMouse)
 
 
-with open('boxes_fixed.pickle', 'rb') as handle:
+with open('in_boxes.pkl', 'rb') as handle:
 	data = pickle.load(handle)
 
-for i, im_path in enumerate(glob("/home/a/Desktop/bar/*")):
+for i, im_path in enumerate(glob("/home/a/Desktop/bar/in/*")):
 	count = 0
 	clicks = []
 	im = cv2.resize(cv2.imread(im_path), (416, 416))
@@ -36,10 +36,13 @@ for i, im_path in enumerate(glob("/home/a/Desktop/bar/*")):
 	cv2.waitKey(0)
 
 ########################################################################
+# for i, im_path in enumerate(tqdm(glob("/home/a/Desktop/bar/in/*"))):
+# 	title, ext = os.path.splitext(os.path.basename(im_path))
+# 	os.rename(im_path, os.path.join("/home/a/Desktop/bar/in/", str(i) + ext))
+########################################################################
 
 # data = {}
-#
-# for i, im_path in enumerate(tqdm(glob("/home/a/Desktop/bar/*"))):
+# for i, im_path in enumerate(tqdm(glob("/home/a/Desktop/bar/in/*"))):
 # 	count = 0
 # 	clicks = []
 # 	im = cv2.resize(cv2.imread(im_path), (416, 416))
@@ -47,7 +50,7 @@ for i, im_path in enumerate(glob("/home/a/Desktop/bar/*")):
 # 	while count < 2:
 # 		cv2.waitKey(10)
 #
-# 	data[im_path] = ['bar', 0, [[clicks[0][1], clicks[0][0], clicks[1][1] - clicks[0][1], clicks[1][0] - clicks[0][0]]]]
+# 	data[im_path] = [['bar', 0, [[clicks[0][1], clicks[0][0], clicks[1][1] - clicks[0][1], clicks[1][0] - clicks[0][0]]]]]
 #
 # 	(noun, noun_class, bbox) = data[im_path]
 # 	for y, x, he, we in bbox:
@@ -55,5 +58,5 @@ for i, im_path in enumerate(glob("/home/a/Desktop/bar/*")):
 # 	cv2.imshow('a', im)
 # 	cv2.waitKey(500)
 #
-# with open('boxes.pickle', 'wb') as handle:
+# with open('in_boxes.pkl', 'wb') as handle:
 # 	pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
