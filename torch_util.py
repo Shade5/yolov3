@@ -50,7 +50,7 @@ def eval_dataset_map(model, dataset, device):
         images = images.to(device)
         labels = labels.to(device)
         weights = weights.to(device)
-        output = model(images)
+        output = model(images, classify=True)
         if batch == 0:
             gt = labels.cpu().detach().numpy()
             pred = output.cpu().detach().numpy()

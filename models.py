@@ -180,7 +180,7 @@ class Darknet(nn.Module):
         self.hyperparams, self.module_list = create_modules(self.module_defs)
         self.maxp2 = nn.MaxPool2d(2, 2)
         self.maxp4 = nn.MaxPool2d(4, 4)
-        self.food_classifier = nn.Linear(54*13*13, 42)
+        self.food_classifier = nn.Linear(3*141*13*13, 42)
 
     def forward(self, x, var=None, classify=False):
         img_size = x.shape[-1]
@@ -207,7 +207,7 @@ class Darknet(nn.Module):
                 output.append(x)
             layer_outputs.append(x)
 
-        class_feature = torch.cat((features[0], self.maxp2(features[1]), self.maxp4(features[2])), dim=1).view(-1, 54*13*13)
+        class_feature = torch.cat((features[0], self.maxp2(features[1]), self.maxp4(features[2])), dim=1).view(-1, 3*features[0].shape[1]*13*13)
 
         if classify:
             return self.food_classifier(class_feature)

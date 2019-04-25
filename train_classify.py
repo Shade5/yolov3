@@ -46,16 +46,16 @@ def train(
 			transforms.Normalize([0.485, 0.456, 0.406], [1, 1, 1])
 		]),
 		'val': transforms.Compose([
-			transforms.Resize(416),
-			transforms.CenterCrop(224),
+			transforms.Resize(512),
+			transforms.CenterCrop(416),
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [1, 1, 1])
 		]),
 	}
 	writer_train = SummaryWriter('./tbx/' + "YOLO_CLASS" + str(datetime.now())[:-7] + "/train")
 
-	data_train = VOC("/run/user/1000/gvfs/sftp:host=matrix.ml.cmu.edu,user=georgejo/home/georgejo/yolov3/scraped100", split='trainval', transform=data_transforms['train'])
-	data_test = VOC("/run/user/1000/gvfs/sftp:host=matrix.ml.cmu.edu,user=georgejo/home/georgejo/yolov3/scraped100", split='test', transform=data_transforms['val'])
+	data_train = VOC("./scraped100", split='trainval', transform=data_transforms['train'])
+	data_test = VOC("./scraped100", split='test', transform=data_transforms['val'])
 
 	validation_split = .2
 
@@ -68,8 +68,8 @@ def train(
 	train_sampler = SubsetRandomSampler(train_indices)
 	valid_sampler = SubsetRandomSampler(val_indices)
 
-	dataloader_train = DataLoader(data_train, batch_size=2, sampler=train_sampler, num_workers=4)
-	dataloader_test = DataLoader(data_test, batch_size=100, sampler=valid_sampler, num_workers=4)
+	dataloader_train = DataLoader(data_train, batch_size=32, sampler=train_sampler, num_workers=4)
+	dataloader_test = DataLoader(data_test, batch_size=32, sampler=valid_sampler, num_workers=4)
 
 	weights = 'weights' + os.sep
 	latest = weights + 'latest.pt'
