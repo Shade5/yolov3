@@ -207,9 +207,8 @@ class Darknet(nn.Module):
                 output.append(x)
             layer_outputs.append(x)
 
-        class_feature = torch.cat((features[0], self.maxp2(features[1]), self.maxp4(features[2])), dim=1).view(-1, 54*13*13)
-
         if classify:
+            class_feature = torch.cat((features[0], self.maxp2(features[1]), self.maxp4(features[2])), dim=1).view(-1, 54 * 13 * 13)
             return self.food_classifier(class_feature)
 
         if self.training:

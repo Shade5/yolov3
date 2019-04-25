@@ -143,12 +143,10 @@ class LoadEpic(Dataset):  # for training/testing
         return len(self.files)
 
     def __getitem__(self, index):
-        f, sf, frame = self.files[index][:3], self.files[index][:6], self.files[index][7:]
-
-        img_path = self.im_path + "/" + f + "/" + sf + "/" + str(frame).zfill(10) + ".jpg"
+        img_path = self.files[index]
 
         try:
-            img = cv2.imread(img_path)  # BGR
+            img = cv2.resize(cv2.imread(img_path), (416, 416)) # BGR
         except:
             print("Missing image:", img_path, "Index:", index)
             img = np.zeros((1920, 1080, 3))
@@ -183,7 +181,7 @@ class LoadEpic(Dataset):  # for training/testing
         img, ratio, padw, padh = letterbox(img, height=self.img_size)
 
         # Load labels
-        entries = self.data_dict[sf + "_" + str(frame)]
+        entries = self.data_dict[img_path]
 
         labels = np.zeros((len(entries), 5))
         for i, (noun, noun_class, bbox) in enumerate(entries):

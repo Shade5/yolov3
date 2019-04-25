@@ -95,19 +95,19 @@ def train(
                                                      last_epoch=start_epoch - 1)
 
     # Dataset
-    data_train = LoadEpic("data/object_detection_images/train", "data/boxes_small.pkl", img_size=img_size, augment=False)
-    data_test = LoadEpic("data/object_detection_images/train", "data/boxes_small.pkl", img_size=img_size, augment=False)
+    data_train = LoadEpic("", "/home/a/workspace/katerina/yolov3/in_boxes.pkl", img_size=img_size, augment=False)
+    data_test = LoadEpic("", "/home/a/workspace/katerina/yolov3/in_boxes.pkl", img_size=img_size, augment=False)
     print("Total number of images:", len(data_train))
 
-    validation_split = .2
-    indices = list(range(len(data_train)))
-    split = int(np.floor(validation_split * len(data_train)))
-    np.random.shuffle(indices)
-    train_indices, val_indices = indices[split:], indices[:split]
-
-    # Creating PT data samplers and loaders:
-    train_sampler = SubsetRandomSampler(train_indices)
-    valid_sampler = SubsetRandomSampler(val_indices)
+    # validation_split = .2
+    # indices = list(range(len(data_train)))
+    # split = int(np.floor(validation_split * len(data_train)))
+    # np.random.shuffle(indices)
+    # train_indices, val_indices = indices[split:], indices[:split]
+    #
+    # # Creating PT data samplers and loaders:
+    # train_sampler = SubsetRandomSampler(train_indices)
+    # valid_sampler = SubsetRandomSampler(val_indices)
 
     # classes = load_classes("data/epic_veg.names")
     # for j in range(len(data_train)):
@@ -119,7 +119,7 @@ def train(
     #     for i in range(l.shape[0]):
     #         _, cl, x, y, w, h = l[i]
     #         im = cv2.rectangle(im, (x - w//2, y - h//2), (x + w//2, y + h//2), (0, 0, 255), 2)
-    #         im = cv2.putText(im, classes[cl], (x - w//2, y - h//2), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    #         # im = cv2.putText(im, classes[cl], (x - w//2, y - h//2), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
     #     cv2.imshow("a", cv2.cvtColor(im, cv2.COLOR_RGB2BGR))
     #     cv2.waitKey(0)
 
@@ -128,13 +128,13 @@ def train(
                             batch_size=batch_size,
                             num_workers=num_workers,
                             collate_fn=data_train.collate_fn,
-                            sampler=train_sampler)
+                            shuffle=True)
 
-    test_dataloader = DataLoader(data_test,
+    test_dataloader = DataLoader(data_train,
                             batch_size=batch_size,
                             num_workers=num_workers,
                             collate_fn=data_train.collate_fn,
-                            sampler=valid_sampler)
+                            shuffle=True)
 
     # Start training
     t = time.time()
@@ -243,7 +243,7 @@ def train(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=273, help='number of epochs')
-    parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
+    parser.add_argument('--batch-size', type=int, default=8, help='size of each image batch')
     parser.add_argument('--accumulate', type=int, default=1, help='accumulate gradient x batches before optimizing')
     parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
     parser.add_argument('--data-cfg', type=str, default='data/coco.data', help='coco.data file path')
