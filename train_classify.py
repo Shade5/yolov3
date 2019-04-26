@@ -120,8 +120,8 @@ def train(
 	train_sampler = SubsetRandomSampler(train_indices)
 	valid_sampler = SubsetRandomSampler(val_indices)
 
-	dataloader_train_detect = DataLoader(data_train_detect, batch_size=batch_size, sampler=train_sampler, num_workers=4)
-	dataloader_test_detect = DataLoader(data_test_detect, batch_size=batch_size, sampler=valid_sampler, num_workers=4)
+	dataloader_train_detect = DataLoader(data_train_detect, batch_size=batch_size, sampler=train_sampler, collate_fn=data_train_detect.collate_fn)
+	dataloader_test_detect = DataLoader(data_test_detect, batch_size=batch_size, sampler=valid_sampler, collate_fn=data_test_detect.collate_fn)
 
 	weights = 'weights' + os.sep
 	latest = weights + 'latest.pt'
