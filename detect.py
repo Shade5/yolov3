@@ -42,7 +42,7 @@ def detect(
         save_images = False
         dataloader = LoadWebcam(img_size=img_size)
     else:
-        dataloader = LoadEpic("", "/home/a/workspace/katerina/yolov3/in_boxes.pkl", img_size=img_size, augment=False)
+        dataloader = LoadEpic("/home/a/Downloads/bar", "in_boxes.pkl", img_size=img_size, augment=False)
 
     # Get classes and colors
     classes = load_classes(parse_data_cfg(data_cfg)['names'])

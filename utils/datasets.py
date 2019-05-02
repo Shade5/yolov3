@@ -137,7 +137,8 @@ class LoadEpic(Dataset):  # for training/testing
         self.im_path = im_path
         self.img_size = img_size
         self.augment = augment
-        self.files = list(self.data_dict.keys())
+        self.keys = list(self.data_dict.keys())
+        self.files = [im_path + "/in/" + os.path.basename(x) for x in list(self.data_dict.keys())]
 
     def __len__(self):
         return len(self.files)
@@ -181,7 +182,7 @@ class LoadEpic(Dataset):  # for training/testing
         img, ratio, padw, padh = letterbox(img, height=self.img_size)
 
         # Load labels
-        entries = self.data_dict[img_path]
+        entries = self.data_dict[self.keys[index]]
 
         labels = np.zeros((len(entries), 5))
         for i, (noun, noun_class, bbox) in enumerate(entries):
