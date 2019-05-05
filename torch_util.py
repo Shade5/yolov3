@@ -5,7 +5,7 @@ import sklearn.metrics
 import warnings
 warnings.filterwarnings("ignore")
 
-CLASS_NAMES = ['grapes', 'orange', 'pineapples', 'strawberries', 'watermelon', 'kiwi', 'croutons', 'cucumber', 'egg', 'lettuce', 'mozarella', 'olives', 'onion', 'parmesan', 'tomato', 'Cantaloupe', "Beans", "Mushroom", "anchovy", "Artichokes", "Pears", "Jicama", "Pepper", "Cabbage", "Cauliflower", "Pineapples", "pasta", "green", "broccoli", "Mango", "apples", "Lemons", "Corn", "chicken", "zucchini", "bellpeppers", "potatoes", "radishes", "carrots", "avocado", "blackbeans", "bacon"]
+CLASS_NAMES = ['grapes', 'pineapples', 'kiwi', 'cucumber', 'egg', 'lettuce', 'olives', 'onion', 'tomato', "Beans", "Mushroom", "Artichokes", "Pears", "Cabbage", "pasta", "broccoli", "apples", "Lemons", "Corn", "chicken", "potatoes", "carrots", "avocado", "bacon"]
 
 
 class VOC(Dataset):

@@ -89,6 +89,7 @@ def train(
 	# Classifier Dataloader
 	data_train_class = VOC("./scraped100", split='trainval', transform=data_transforms['train'])
 	data_test_class = VOC("./scraped100", split='test', transform=data_transforms['val'])
+	print("Classifier images:", len(data_train_class), "Batch size:", batch_size)
 
 	validation_split = .2
 
@@ -106,8 +107,9 @@ def train(
 
 
 	# Classifier Detector
-	data_train_detect = LoadEpic("data/object_detection_images/train", "data/boxes_small.pkl", img_size=img_size, augment=False)
-	data_test_detect = LoadEpic("data/object_detection_images/train", "data/boxes_small.pkl", img_size=img_size, augment=False)
+	data_train_detect = LoadEpic("data/object_detection_images/train", "data/boxes_common.pkl", img_size=img_size, augment=False)
+	data_test_detect = LoadEpic("data/object_detection_images/train", "data/boxes_common.pkl", img_size=img_size, augment=False)
+	print("Detector images:", len(data_train_detect), "Batch size:", batch_size * len(data_train_detect) / len(data_train_class))
 
 	validation_split = .2
 
@@ -120,14 +122,14 @@ def train(
 	train_sampler = SubsetRandomSampler(train_indices)
 	valid_sampler = SubsetRandomSampler(val_indices)
 
-	dataloader_train_detect = DataLoader(data_train_detect, batch_size=batch_size, sampler=train_sampler, collate_fn=data_train_detect.collate_fn)
-	dataloader_test_detect = DataLoader(data_test_detect, batch_size=batch_size, sampler=valid_sampler, collate_fn=data_test_detect.collate_fn)
+	dataloader_train_detect = DataLoader(data_train_detect, batch_size=int(batch_size * len(data_train_detect) / len(data_train_class)), sampler=train_sampler, collate_fn=data_train_detect.collate_fn)
+	dataloader_test_detect = DataLoader(data_test_detect, batch_size=int(batch_size * len(data_train_detect) / len(data_train_class)), sampler=valid_sampler, collate_fn=data_test_detect.collate_fn)
 
 	weights = 'weights' + os.sep
 	latest = weights + 'latest.pt'
 	best = weights + 'best.pt'
 	device = torch_utils.select_device()
-	run_name = "hydra" + datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+	run_name = "hydra_" + input("Enter run name") + "_" + datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 	writer_train = SummaryWriter("./tbx/" + run_name)
 	print("Run name:", run_name)
 
@@ -151,11 +153,11 @@ def train(
 		p.requires_grad = True if p.shape[0] == nf else False
 
 	criterion = nn.BCELoss()
-	optimizer = optim.Adam(model.parameters(), lr= 0.0001)
+	optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 	global_step = 0
 
-	for e in range(20):
+	for e in range(200):
 		model.train()
 		for batch, data in enumerate(tqdm(zip(dataloader_train_class, dataloader_train_detect))):
 			loss = train_step_class(model, data[0], optimizer, criterion, device)
@@ -174,8 +176,8 @@ def train(
 			AP, mAP, acc = eval_dataset_map(model, dataloader_test_class, device)
 			writer_train.add_scalar('train/Classifier_mAP', mAP, global_step)
 			writer_train.add_scalar('train/Classifier_acc', acc, global_step)
-
-			mp, mr, ap, mf1, tloss = test.test(dataloader_test_detect, model=model, img_size=img_size)
+			with torch.no_grad():
+				mp, mr, ap, mf1, tloss = test.test(dataloader_test_detect, model=model, img_size=img_size)
 			writer_train.add_scalar('val/Detector_precision', mp, global_step)
 			writer_train.add_scalar('val/Detector_recall', mr, global_step)
 			writer_train.add_scalar('val/Detector_map', ap, global_step)
@@ -185,7 +187,7 @@ def train(
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--epochs', type=int, default=273, help='number of epochs')
-	parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
+	parser.add_argument('--batch-size', type=int, default=10, help='size of each image batch')
 	parser.add_argument('--accumulate', type=int, default=1, help='accumulate gradient x batches before optimizing')
 	parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
 	parser.add_argument('--data-cfg', type=str, default='data/coco.data', help='coco.data file path')
