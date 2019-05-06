@@ -139,7 +139,11 @@ def train(
 	train_path = parse_data_cfg(data_cfg)['train']
 
 	# Initialize model
-	model = Darknet(cfg, img_size).to(device)
+	model = Darknet(cfg, img_size)
+
+	model.load_state_dict(torch.load("weights/food36_classify.pt", map_location=device))
+
+	model.to(device)
 
 	cutoff = -1  # backbone reaches to cutoff layer
 	start_epoch = 0
@@ -182,6 +186,11 @@ def train(
 			writer_train.add_scalar('val/Detector_recall', mr, global_step)
 			writer_train.add_scalar('val/Detector_map', ap, global_step)
 			writer_train.add_scalar('val/Detector_loss', tloss, global_step)
+			with torch.no_grad():
+				mp, mr, ap, mf1, tloss = test.test(dataloader_train_detect, model=model, img_size=img_size)
+			writer_train.add_scalar('train/Detector_precision', mp, global_step)
+			writer_train.add_scalar('train/Detector_recall', mr, global_step)
+			writer_train.add_scalar('train/Detector_map', ap, global_step)
 
 
 if __name__ == '__main__':
