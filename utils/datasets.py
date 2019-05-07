@@ -130,7 +130,7 @@ class LoadWebcam:  # for inference
 
 
 class LoadEpic(Dataset):  # for training/testing
-    def __init__(self, im_path, ann_path, img_size=416, augment=False):
+    def __init__(self, im_path, ann_path, img_size=416, augment=False, train=True):
         with open(ann_path, 'rb') as handle:
             self.data_dict = pickle.load(handle)
 
@@ -138,6 +138,7 @@ class LoadEpic(Dataset):  # for training/testing
         self.img_size = img_size
         self.augment = augment
         self.files = list(self.data_dict.keys())
+        self.train = train
 
     def __len__(self):
         return len(self.files)
@@ -182,67 +183,70 @@ class LoadEpic(Dataset):  # for training/testing
         h, w, _ = img.shape
         img, ratio, padw, padh = letterbox(img, height=self.img_size)
 
-        # Load labels
-        entries = self.data_dict[sf + "_" + str(frame)]
+        if self.train:
+            entries = self.data_dict[sf + "_" + str(frame)]
 
-        labels = np.zeros((len(entries), 5))
-        for i, (noun, noun_class, bbox) in enumerate(entries):
-            for y, x, he, we in bbox:
-                labels[i] = [noun_class, x, y, we, he]
+            labels = np.zeros((len(entries), 5))
+            for i, (noun, noun_class, bbox) in enumerate(entries):
+                for y, x, he, we in bbox:
+                    labels[i] = [noun_class, x, y, we, he]
 
-        lcopy = labels.copy()
-        labels[:, 1] = ratio * (lcopy[:, 1]) + padw
-        labels[:, 2] = ratio * (lcopy[:, 2]) + padh
-        labels[:, 3] = ratio * (lcopy[:, 1] + lcopy[:, 3]) + padw
-        labels[:, 4] = ratio * (lcopy[:, 2] + lcopy[:, 4]) + padh
+            lcopy = labels.copy()
+            labels[:, 1] = ratio * (lcopy[:, 1]) + padw
+            labels[:, 2] = ratio * (lcopy[:, 2]) + padh
+            labels[:, 3] = ratio * (lcopy[:, 1] + lcopy[:, 3]) + padw
+            labels[:, 4] = ratio * (lcopy[:, 2] + lcopy[:, 4]) + padh
 
-        # im = img.copy()
-        # for i in range(labels.shape[0]):
-        #     _, x1, y1, x2, y2 = labels[i].astype(int)
-        #     im = cv2.rectangle(im, (x1, y1), (x2, y2), (0, 0, 255), 2)
-        # cv2.imshow("d", im)
+            im = img.copy()
+            for i in range(labels.shape[0]):
+                _, x1, y1, x2, y2 = labels[i].astype(int)
+                im = cv2.rectangle(im, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            cv2.imshow("d", im)
 
-        # Augment image and labels
-        if self.augment:
-            img, labels = random_affine(img, labels, degrees=(-5, 5), translate=(0.10, 0.10), scale=(0.90, 1.10))
+            # Augment image and labels
+            if self.augment:
+                img, labels = random_affine(img, labels, degrees=(-5, 5), translate=(0.10, 0.10), scale=(0.90, 1.10))
 
-        nL = len(labels)  # number of labels
-        if nL:
-            # convert xyxy to xywh
-            labels[:, 1:5] = xyxy2xywh(labels[:, 1:5]) / self.img_size
+            nL = len(labels)  # number of labels
+            if nL:
+                # convert xyxy to xywh
+                labels[:, 1:5] = xyxy2xywh(labels[:, 1:5]) / self.img_size
 
-        if self.augment:
-            # random left-right flip
-            lr_flip = True
-            if lr_flip and random.random() > 0.5:
-                img = np.fliplr(img)
-                if nL:
-                    labels[:, 1] = 1 - labels[:, 1]
+            if self.augment:
+                # random left-right flip
+                lr_flip = True
+                if lr_flip and random.random() > 0.5:
+                    img = np.fliplr(img)
+                    if nL:
+                        labels[:, 1] = 1 - labels[:, 1]
 
-            # random up-down flip
-            ud_flip = False
-            if ud_flip and random.random() > 0.5:
-                img = np.flipud(img)
-                if nL:
-                    labels[:, 2] = 1 - labels[:, 2]
+                # random up-down flip
+                ud_flip = False
+                if ud_flip and random.random() > 0.5:
+                    img = np.flipud(img)
+                    if nL:
+                        labels[:, 2] = 1 - labels[:, 2]
 
-        # im = img.copy()
-        # for i in range(labels.shape[0]):
-        #     _, x, y, we, he = (labels[i]*416).astype(int)
-        #     im = cv2.rectangle(im, (x - we//2, y - he//2), (x + we//2, y + he//2), (0, 0, 255), 2)
-        # cv2.imshow("p", im)
-        # cv2.waitKey(0)
+            im = img.copy()
+            for i in range(labels.shape[0]):
+                _, x, y, we, he = (labels[i]*416).astype(int)
+                im = cv2.rectangle(im, (x - we//2, y - he//2), (x + we//2, y + he//2), (0, 0, 255), 2)
+            cv2.imshow("p", im)
+            cv2.waitKey(0)
 
-        labels_out = torch.zeros((nL, 6))
-        if nL:
-            labels_out[:, 1:] = torch.from_numpy(labels)
+            labels_out = torch.zeros((nL, 6))
+            if nL:
+                labels_out[:, 1:] = torch.from_numpy(labels)
 
         # Normalize
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
         img = np.ascontiguousarray(img, dtype=np.float32)  # uint8 to float32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
 
-        return torch.from_numpy(img), labels_out, img_path, (h, w)
+        if self.train:
+            torch.from_numpy(img), labels_out, img_path, (h, w)
+
+        return torch.from_numpy(img), 1, img_path, (h, w)
 
     @staticmethod
     def collate_fn(batch):

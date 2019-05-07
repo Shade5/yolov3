@@ -30,7 +30,7 @@ def detect(
 
     # Load weights
     if weights.endswith('.pt'):  # pytorch format
-        model.load_state_dict(torch.load(weights, map_location=device)['model'])
+        model.load_state_dict(torch.load(weights, map_location=device))
     else:  # darknet format
         _ = load_darknet_weights(model, weights)
 
@@ -84,11 +84,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
     parser.add_argument('--data-cfg', type=str, default='data/coco.data', help='coco.data file path')
-    parser.add_argument('--weights', type=str, default='weights/backup100.pt', help='path to weights file')
+    parser.add_argument('--weights', type=str, default='weights/food54_classify.pt', help='path to weights file')
     parser.add_argument('--images', type=str, default='data/samples', help='path to images')
     parser.add_argument('--img-size', type=int, default=416, help='size of each image dimension')
-    parser.add_argument('--conf-thres', type=float, default=0.15, help='object confidence threshold')
-    parser.add_argument('--nms-thres', type=float, default=0.15, help='iou threshold for non-maximum suppression')
+    parser.add_argument('--conf-thres', type=float, default=0.3, help='object confidence threshold')
+    parser.add_argument('--nms-thres', type=float, default=0.01, help='iou threshold for non-maximum suppression')
     opt = parser.parse_args()
     print(opt)
 
