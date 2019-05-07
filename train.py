@@ -95,8 +95,8 @@ def train(
                                                      last_epoch=start_epoch - 1)
 
     # Dataset
-    data_train = LoadEpic("", "/home/a/workspace/katerina/yolov3/in_boxes.pkl", img_size=img_size, augment=False)
-    data_test = LoadEpic("", "/home/a/workspace/katerina/yolov3/in_boxes.pkl", img_size=img_size, augment=False)
+    data_train = LoadEpic("/home/a/Downloads/bar/indoor_annotated", "/home/a/Downloads/bar/indoor_annotated/boxes.pkl", img_size=img_size, augment=False)
+    data_test = LoadEpic("/home/a/Downloads/bar/indoor_annotated", "/home/a/Downloads/bar/indoor_annotated/boxes.pkl", img_size=img_size, augment=False)
     print("Total number of images:", len(data_train))
 
     # validation_split = .2

@@ -138,7 +138,7 @@ class LoadEpic(Dataset):  # for training/testing
         self.img_size = img_size
         self.augment = augment
         self.keys = list(self.data_dict.keys())
-        self.files = [im_path + "/in/" + os.path.basename(x) for x in list(self.data_dict.keys())]
+        self.files = [im_path + "/" + os.path.basename(x) for x in list(self.data_dict.keys())]
 
     def __len__(self):
         return len(self.files)
