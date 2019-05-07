@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
+import pickle
 
 from utils.utils import xyxy2xywh
 
@@ -95,7 +96,7 @@ class LoadImages:  # for inference
 
 class LoadWebcam:  # for inference
     def __init__(self, img_size=416):
-        self.cam = cv2.VideoCapture(0)
+        self.cam = cv2.VideoCapture(1)
         self.height = img_size
 
     def __iter__(self):
@@ -127,6 +128,255 @@ class LoadWebcam:  # for inference
 
     def __len__(self):
         return 0
+
+
+class LoadEpic(Dataset):  # for training/testing
+    def __init__(self, im_path, ann_path, img_size=416, augment=False, train=True):
+        with open(ann_path, 'rb') as handle:
+            self.data_dict = pickle.load(handle)
+
+        self.im_path = im_path
+        self.img_size = img_size
+        self.augment = augment
+        self.files = list(self.data_dict.keys())
+        self.train = train
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, index):
+        f, sf, frame = self.files[index][:3], self.files[index][:6], self.files[index][7:]
+
+        img_path = self.im_path + "/" + f + "/" + sf + "/" + str(frame).zfill(10) + ".jpg"
+
+        try:
+            img = cv2.resize(cv2.imread(img_path), (416, 416)) # BGR
+        except:
+            print("Missing image:", img_path, "Index:", index)
+            img = np.zeros((1920, 1080, 3))
+        # im = img.copy()
+        if img is None:
+            print("Missing image:", img_path, "Index:", index)
+            img = np.zeros((1920, 1080, 3))
+
+        augment_hsv = True
+        if self.augment and augment_hsv:
+            # SV augmentation by 50%
+            fraction = 0.50  # must be < 1.0
+            img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            S = img_hsv[:, :, 1].astype(np.float32)
+            V = img_hsv[:, :, 2].astype(np.float32)
+
+            a = (random.random() * 2 - 1) * fraction + 1
+            S *= a
+            if a > 1:
+                np.clip(S, None, 255, out=S)
+
+            a = (random.random() * 2 - 1) * fraction + 1
+            V *= a
+            if a > 1:
+                np.clip(V, None, 255, out=V)
+
+            img_hsv[:, :, 1] = S  # .astype(np.uint8)
+            img_hsv[:, :, 2] = V  # .astype(np.uint8)
+            cv2.cvtColor(img_hsv, cv2.COLOR_HSV2BGR, dst=img)
+
+        h, w, _ = img.shape
+        img, ratio, padw, padh = letterbox(img, new_shape=self.img_size)
+
+        if self.train:
+            entries = self.data_dict[sf + "_" + str(frame)]
+
+            labels = np.zeros((len(entries), 5))
+            for i, (noun, noun_class, bbox) in enumerate(entries):
+                for y, x, he, we in bbox:
+                    labels[i] = [noun_class, x, y, we, he]
+
+            lcopy = labels.copy()
+            labels[:, 1] = ratio * (lcopy[:, 1]) + padw
+            labels[:, 2] = ratio * (lcopy[:, 2]) + padh
+            labels[:, 3] = ratio * (lcopy[:, 1] + lcopy[:, 3]) + padw
+            labels[:, 4] = ratio * (lcopy[:, 2] + lcopy[:, 4]) + padh
+
+            # im = img.copy()
+            # for i in range(labels.shape[0]):
+            #     _, x1, y1, x2, y2 = labels[i].astype(int)
+            #     im = cv2.rectangle(im, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            # cv2.imshow("d", im)
+
+            # Augment image and labels
+            if self.augment:
+                img, labels = random_affine(img, labels, degrees=(-5, 5), translate=(0.10, 0.10), scale=(0.90, 1.10))
+
+            nL = len(labels)  # number of labels
+            if nL:
+                # convert xyxy to xywh
+                labels[:, 1:5] = xyxy2xywh(labels[:, 1:5]) / self.img_size
+
+            if self.augment:
+                # random left-right flip
+                lr_flip = True
+                if lr_flip and random.random() > 0.5:
+                    img = np.fliplr(img)
+                    if nL:
+                        labels[:, 1] = 1 - labels[:, 1]
+
+                # random up-down flip
+                ud_flip = False
+                if ud_flip and random.random() > 0.5:
+                    img = np.flipud(img)
+                    if nL:
+                        labels[:, 2] = 1 - labels[:, 2]
+
+            # im = img.copy()
+            # for i in range(labels.shape[0]):
+            #     _, x, y, we, he = (labels[i]*416).astype(int)
+            #     im = cv2.rectangle(im, (x - we//2, y - he//2), (x + we//2, y + he//2), (0, 0, 255), 2)
+            # cv2.imshow("p", im)
+            # cv2.waitKey(0)
+
+            labels_out = torch.zeros((nL, 6))
+            if nL:
+                labels_out[:, 1:] = torch.from_numpy(labels)
+
+        # Normalize
+        img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+        img = np.ascontiguousarray(img, dtype=np.float32)  # uint8 to float32
+        img /= 255.0  # 0 - 255 to 0.0 - 1.0
+
+        if self.train:
+            torch.from_numpy(img), labels_out, img_path, (h, w)
+
+        return torch.from_numpy(img), 1, img_path, (h, w)
+
+    @staticmethod
+    def collate_fn(batch):
+        img, label, path, hw = list(zip(*batch))  # transposed
+        for i, l in enumerate(label):
+            l[:, 0] = i  # add target image index for build_targets()
+        return torch.stack(img, 0), torch.cat(label, 0), path, hw
+
+
+class LoadPickle(Dataset):  # for training/testing
+    def __init__(self, im_path, ann_path, img_size=416, augment=False):
+        with open(ann_path, 'rb') as handle:
+            self.data_dict = pickle.load(handle)
+
+        self.im_path = im_path
+        self.img_size = img_size
+        self.augment = augment
+        self.keys = list(self.data_dict.keys())
+        self.files = [im_path + "/" + os.path.basename(x) for x in list(self.data_dict.keys())]
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, index):
+        img_path = self.files[index]
+
+        try:
+            img = cv2.resize(cv2.imread(img_path), (416, 416)) # BGR
+        except:
+            print("Missing image:", img_path, "Index:", index)
+            img = np.zeros((1920, 1080, 3))
+        # im = img.copy()
+        if img is None:
+            print("Missing image:", img_path, "Index:", index)
+            img = np.zeros((1920, 1080, 3))
+
+        augment_hsv = True
+        if self.augment and augment_hsv:
+            # SV augmentation by 50%
+            fraction = 0.50  # must be < 1.0
+            img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            S = img_hsv[:, :, 1].astype(np.float32)
+            V = img_hsv[:, :, 2].astype(np.float32)
+
+            a = (random.random() * 2 - 1) * fraction + 1
+            S *= a
+            if a > 1:
+                np.clip(S, None, 255, out=S)
+
+            a = (random.random() * 2 - 1) * fraction + 1
+            V *= a
+            if a > 1:
+                np.clip(V, None, 255, out=V)
+
+            img_hsv[:, :, 1] = S  # .astype(np.uint8)
+            img_hsv[:, :, 2] = V  # .astype(np.uint8)
+            cv2.cvtColor(img_hsv, cv2.COLOR_HSV2BGR, dst=img)
+
+        h, w, _ = img.shape
+        img, ratio, padw, padh = letterbox(img, new_shape=self.img_size)
+
+        # Load labels
+        entries = self.data_dict[self.keys[index]]
+
+        labels = np.zeros((len(entries), 5))
+        for i, (noun, noun_class, bbox) in enumerate(entries):
+            for y, x, he, we in bbox:
+                labels[i] = [noun_class, x, y, we, he]
+
+        lcopy = labels.copy()
+        labels[:, 1] = ratio * (lcopy[:, 1]) + padw
+        labels[:, 2] = ratio * (lcopy[:, 2]) + padh
+        labels[:, 3] = ratio * (lcopy[:, 1] + lcopy[:, 3]) + padw
+        labels[:, 4] = ratio * (lcopy[:, 2] + lcopy[:, 4]) + padh
+
+        # im = img.copy()
+        # for i in range(labels.shape[0]):
+        #     _, x1, y1, x2, y2 = labels[i].astype(int)
+        #     im = cv2.rectangle(im, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        # cv2.imshow("d", im)
+
+        # Augment image and labels
+        if self.augment:
+            img, labels = random_affine(img, labels, degrees=(-5, 5), translate=(0.10, 0.10), scale=(0.90, 1.10))
+
+        nL = len(labels)  # number of labels
+        if nL:
+            # convert xyxy to xywh
+            labels[:, 1:5] = xyxy2xywh(labels[:, 1:5]) / self.img_size
+
+        if self.augment:
+            # random left-right flip
+            lr_flip = True
+            if lr_flip and random.random() > 0.5:
+                img = np.fliplr(img)
+                if nL:
+                    labels[:, 1] = 1 - labels[:, 1]
+
+            # random up-down flip
+            ud_flip = False
+            if ud_flip and random.random() > 0.5:
+                img = np.flipud(img)
+                if nL:
+                    labels[:, 2] = 1 - labels[:, 2]
+
+        # im = img.copy()
+        # for i in range(labels.shape[0]):
+        #     _, x, y, we, he = (labels[i]*416).astype(int)
+        #     im = cv2.rectangle(im, (x - we//2, y - he//2), (x + we//2, y + he//2), (0, 0, 255), 2)
+        # cv2.imshow("p", im)
+        # cv2.waitKey(0)
+
+        labels_out = torch.zeros((nL, 6))
+        if nL:
+            labels_out[:, 1:] = torch.from_numpy(labels)
+
+        # Normalize
+        img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+        img = np.ascontiguousarray(img, dtype=np.float32)  # uint8 to float32
+        img /= 255.0  # 0 - 255 to 0.0 - 1.0
+
+        return torch.from_numpy(img), labels_out, img_path, (h, w)
+
+    @staticmethod
+    def collate_fn(batch):
+        img, label, path, hw = list(zip(*batch))  # transposed
+        for i, l in enumerate(label):
+            l[:, 0] = i  # add target image index for build_targets()
+        return torch.stack(img, 0), torch.cat(label, 0), path, hw
 
 
 class LoadImagesAndLabels(Dataset):  # for training/testing

@@ -9,62 +9,24 @@ from utils.utils import *
 
 
 def test(
-        cfg,
-        data_cfg,
-        weights=None,
-        batch_size=16,
-        img_size=416,
+        dataloader,
+        model=None,
         iou_thres=0.5,
         conf_thres=0.001,
         nms_thres=0.5,
-        save_json=False,
-        model=None
+        save_json=False
 ):
-    if model is None:
-        device = torch_utils.select_device()
-
-        # Initialize model
-        model = Darknet(cfg, img_size).to(device)
-
-        # Load weights
-        if weights.endswith('.pt'):  # pytorch format
-            model.load_state_dict(torch.load(weights, map_location=device)['model'])
-        else:  # darknet format
-            _ = load_darknet_weights(model, weights)
-
-        if torch.cuda.device_count() > 1:
-            model = nn.DataParallel(model)
-    else:
-        device = next(model.parameters()).device  # get model device
-
-    # Configure run
-    data_cfg = parse_data_cfg(data_cfg)
-    nc = int(data_cfg['classes'])  # number of classes
-    test_path = data_cfg['valid']  # path to test images
-    names = load_classes(data_cfg['names'])  # class names
-
-    # Dataloader
-    dataset = LoadImagesAndLabels(test_path, img_size, batch_size)
-    dataloader = DataLoader(dataset,
-                            batch_size=batch_size,
-                            num_workers=4,
-                            pin_memory=True,
-                            collate_fn=dataset.collate_fn)
+    device = next(model.parameters()).device  # get model device
 
     seen = 0
     model.eval()
     coco91class = coco80_to_coco91_class()
-    print(('%20s' + '%10s' * 6) % ('Class', 'Images', 'Targets', 'P', 'R', 'mAP', 'F1'))
     loss, p, r, f1, mp, mr, map, mf1 = 0., 0., 0., 0., 0., 0., 0., 0.
     jdict, stats, ap, ap_class = [], [], [], []
     for batch_i, (imgs, targets, paths, shapes) in enumerate(tqdm(dataloader, desc='Computing mAP')):
         targets = targets.to(device)
         imgs = imgs.to(device)
         _, _, height, width = imgs.shape  # batch size, channels, height, width
-
-        # Plot images with bounding boxes
-        if batch_i == 0 and not os.path.exists('test_batch0.jpg'):
-            plot_images(imgs=imgs, targets=targets, fname='test_batch0.jpg')
 
         # Run model
         inf_out, train_out = model(imgs)  # inference and training outputs
@@ -141,39 +103,10 @@ def test(
 
     # Compute statistics
     stats = [np.concatenate(x, 0) for x in list(zip(*stats))]  # to numpy
-    nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
     if len(stats):
         p, r, ap, f1, ap_class = ap_per_class(*stats)
         mp, mr, map, mf1 = p.mean(), r.mean(), ap.mean(), f1.mean()
 
-    # Print results
-    pf = '%20s' + '%10.3g' * 6  # print format
-    print(pf % ('all', seen, nt.sum(), mp, mr, map, mf1), end='\n\n')
-
-    # Print results per class
-    if nc > 1 and len(stats):
-        for i, c in enumerate(ap_class):
-            print(pf % (names[c], seen, nt[c], p[i], r[i], ap[i], f1[i]))
-
-    # Save JSON
-    if save_json and map and len(jdict):
-        imgIds = [int(Path(x).stem.split('_')[-1]) for x in dataset.img_files]
-        with open('results.json', 'w') as file:
-            json.dump(jdict, file)
-
-        from pycocotools.coco import COCO
-        from pycocotools.cocoeval import COCOeval
-
-        # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
-        cocoGt = COCO('../coco/annotations/instances_val2014.json')  # initialize COCO ground truth api
-        cocoDt = cocoGt.loadRes('results.json')  # initialize COCO pred api
-
-        cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
-        cocoEval.params.imgIds = imgIds  # [:32]  # only evaluate these images
-        cocoEval.evaluate()
-        cocoEval.accumulate()
-        cocoEval.summarize()
-        map = cocoEval.stats[1]  # update mAP to pycocotools mAP
 
     # Return results
     return mp, mr, map, mf1, loss / len(dataloader)
