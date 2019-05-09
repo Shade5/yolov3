@@ -83,8 +83,12 @@ def train(
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lf, last_epoch=start_epoch - 1)
 
     # Dataset
-    data_train = LoadPickle("/home/a/Downloads/bar/indoor_annotated", "/home/a/Downloads/bar/indoor_annotated/boxes.pkl", img_size=img_size, augment=False)
-    data_test = LoadPickle("/home/a/Downloads/bar/indoor_annotated", "/home/a/Downloads/bar/indoor_annotated/boxes.pkl", img_size=img_size, augment=False)
+    data_train = LoadPickle("/home/a/Downloads/bar/indoor_annotated",
+                            "/home/a/Downloads/bar/indoor_annotated/boxes.pkl",
+                            img_size=img_size, augment=False)
+    data_test = LoadPickle("/home/a/Downloads/bar/indoor_annotated",
+                           "/home/a/Downloads/bar/indoor_annotated/boxes.pkl",
+                           img_size=img_size, augment=False)
     print("Total number of images:", len(data_train))
 
     # for j in range(len(data_train)):
@@ -177,6 +181,11 @@ def train(
                 writer.add_scalar('val/recall', mr, n_iter)
                 writer.add_scalar('val/map', ap, n_iter)
                 writer.add_scalar('val/loss', tloss, n_iter)
+
+                mp, mr, ap, mf1, tloss = test.test(dataloader, model=model, conf_thres=0.1)
+                writer.add_scalar('train/precision', mp, n_iter)
+                writer.add_scalar('train/recall', mr, n_iter)
+                writer.add_scalar('train/map', ap, n_iter)
             model.train()
 
             chkpt = {'epoch': epoch,

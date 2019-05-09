@@ -83,10 +83,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
     parser.add_argument('--data-cfg', type=str, default='data/coco.data', help='coco.data file path')
-    parser.add_argument('--weights', type=str, default='weights/barrel120.pt', help='path to weights file')
+    parser.add_argument('--weights', type=str, default='weights/backup130.pt', help='path to weights file')
     parser.add_argument('--images', type=str, default='data/samples', help='path to images')
     parser.add_argument('--img-size', type=int, default=416, help='inference size (pixels)')
-    parser.add_argument('--conf-thres', type=float, default=0.1, help='object confidence threshold')
+    parser.add_argument('--conf-thres', type=float, default=0.3, help='object confidence threshold')
     parser.add_argument('--nms-thres', type=float, default=0.1, help='iou threshold for non-maximum suppression')
     opt = parser.parse_args()
     print(opt)
@@ -98,5 +98,6 @@ if __name__ == '__main__':
             opt.weights,
             img_size=opt.img_size,
             conf_thres=opt.conf_thres,
-            nms_thres=opt.nms_thres
+            nms_thres=opt.nms_thres,
+            webcam=True
         )
