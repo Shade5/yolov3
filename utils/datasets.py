@@ -150,7 +150,7 @@ class LoadEpic(Dataset):  # for training/testing
         img_path = self.im_path + "/" + f + "/" + sf + "/" + str(frame).zfill(10) + ".jpg"
 
         try:
-            img = cv2.resize(cv2.imread(img_path), (416, 416)) # BGR
+            img = cv2.imread(img_path) # BGR
         except:
             print("Missing image:", img_path, "Index:", index)
             img = np.zeros((1920, 1080, 3))
@@ -245,7 +245,7 @@ class LoadEpic(Dataset):  # for training/testing
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
 
         if self.train:
-            torch.from_numpy(img), labels_out, img_path, (h, w)
+            return torch.from_numpy(img), labels_out, img_path, (h, w)
 
         return torch.from_numpy(img), 1, img_path, (h, w)
 

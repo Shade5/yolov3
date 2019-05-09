@@ -1,6 +1,6 @@
-classes=128
+classes=25
 train=data/coco/trainvalno5k.txt
 valid=data/coco/5k.txt
-names=data/barrel.names
+names=data/epic_common.names
 backup=backup/
 eval=coco

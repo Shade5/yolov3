@@ -83,13 +83,25 @@ def train(
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lf, last_epoch=start_epoch - 1)
 
     # Dataset
-    data_train = LoadPickle("/home/a/Downloads/bar/indoor_annotated",
-                            "/home/a/Downloads/bar/indoor_annotated/boxes.pkl",
-                            img_size=img_size, augment=False)
-    data_test = LoadPickle("/home/a/Downloads/bar/indoor_annotated",
-                           "/home/a/Downloads/bar/indoor_annotated/boxes.pkl",
-                           img_size=img_size, augment=False)
+    data_train = LoadEpic("data/object_detection_images/train",
+                          "data/boxes_common.pkl",
+                          img_size=img_size,
+                          augment=False)
+    data_val = LoadEpic("data/object_detection_images/train",
+                         "data/boxes_common.pkl",
+                         img_size=img_size,
+                         augment=False)
     print("Total number of images:", len(data_train))
+
+    validation_split = .2
+    indices = list(range(len(data_train)))
+    split = int(np.floor(validation_split * len(data_train)))
+    np.random.shuffle(indices)
+    train_indices, val_indices = indices[split:], indices[:split]
+
+    # Creating PT data samplers and loaders:
+    train_sampler = SubsetRandomSampler(train_indices)
+    valid_sampler = SubsetRandomSampler(val_indices)
 
     # for j in range(len(data_train)):
     #     im, l, _, _ = data_train[j]
@@ -109,13 +121,13 @@ def train(
                             batch_size=batch_size,
                             num_workers=opt.num_workers,
                             collate_fn=data_train.collate_fn,
-                            shuffle=True)
+                            sampler=train_sampler)
 
-    test_dataloader = DataLoader(data_test,
+    test_dataloader = DataLoader(data_val,
                             batch_size=batch_size,
                             num_workers=opt.num_workers,
                             collate_fn=data_train.collate_fn,
-                            shuffle=False)
+                            sampler=valid_sampler)
 
     # Start training
     t, t0 = time.time(), time.time()
@@ -206,7 +218,7 @@ def train(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=273, help='number of epochs')
-    parser.add_argument('--batch-size', type=int, default=8, help='size of each image batch')
+    parser.add_argument('--batch-size', type=int, default=64, help='size of each image batch')
     parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
     parser.add_argument('--data-cfg', type=str, default='data/coco.data', help='coco.data file path')
     parser.add_argument('--img-size', type=int, default=416, help='inference size (pixels)')
